@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut, interactive-widget=resizes-content" />
+<meta name="theme-color" content="#f6f2ea" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#17150f" media="(prefers-color-scheme: dark)" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Assistant" />
+<meta name="robots" content="noindex, nofollow" />
+<title>My Assistant</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="preconnect" href="https://api.fontshare.com" />
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=gambetta@500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<!-- Lock screen -->
+<section id="lock" class="lock" hidden>
+  <div class="lock-card">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="40" height="40"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="currentColor"/></svg>
+    </div>
+    <h1 class="lock-title" id="lock-title">Welcome back</h1>
+    <p class="muted" id="lock-sub">Enter your passcode to open your assistant.</p>
+    <form id="lock-form" autocomplete="off">
+      <input id="lock-input" class="field pin" type="password" inputmode="numeric" placeholder="Passcode" aria-label="Passcode" data-testid="input-passcode" />
+      <p class="error" id="lock-error" role="alert"></p>
+      <button class="btn primary wide" type="submit" data-testid="button-unlock">Unlock</button>
+    </form>
+  </div>
+</section>
+
+<!-- Main app -->
+<div id="app" class="app" hidden>
+  <aside id="drawer" class="drawer" aria-label="Conversations">
+    <div class="drawer-head">
+      <span class="brand" id="brand-name">Assistant</span>
+      <button class="icon-btn only-mobile" id="close-drawer" aria-label="Close menu">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <button class="btn primary wide" id="new-chat" data-testid="button-new-chat">
+      <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg> New chat
+    </button>
+    <nav class="chat-list" id="chat-list"></nav>
+    <div class="drawer-foot">
+      <button class="btn ghost wide" id="open-memory" data-testid="button-memory">
+        <svg viewBox="0 0 24 24" class="ic"><path d="M12 3a6 6 0 0 0-6 6c0 2.4 1.4 3.7 2.5 4.8.8.8 1.5 1.5 1.5 2.7V18h4v-1.5c0-1.2.7-1.9 1.5-2.7C16.6 12.7 18 11.4 18 9a6 6 0 0 0-6-6zM10 21h4"/></svg> What it knows about me
+      </button>
+      <button class="btn ghost wide" id="open-settings" data-testid="button-settings">
+        <svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> Settings
+      </button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="open-drawer" aria-label="Open menu" data-testid="button-menu">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      </button>
+      <div class="topbar-title">
+        <span id="chat-title">New chat</span>
+        <span class="engine-pill" id="engine-pill" data-testid="status-engine">Not set up</span>
+      </div>
+      <button class="icon-btn" id="lock-now" aria-label="Lock" title="Lock" data-testid="button-lock">
+        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </button>
+    </header>
+
+    <div class="thread" id="thread" aria-live="polite"></div>
+
+    <form class="composer" id="composer">
+      <div class="composer-inner">
+        <textarea id="input" rows="1" placeholder="Ask me anything…" aria-label="Message" data-testid="input-message"></textarea>
+        <button class="send" id="send" type="submit" aria-label="Send" data-testid="button-send">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+      <p class="fine" id="fine">Your chats stay on this device.</p>
+    </form>
+  </main>
+</div>
+
+<!-- Sheets -->
+<dialog id="settings" class="sheet">
+  <form method="dialog" class="sheet-body" id="settings-form">
+    <div class="sheet-head"><h2>Settings</h2><button class="icon-btn" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+
+    <label class="lbl" for="s-name">Assistant's name</label>
+    <input class="field" id="s-name" placeholder="Assistant" data-testid="input-assistant-name" />
+
+    <label class="lbl" for="s-user">Your name</label>
+    <input class="field" id="s-user" placeholder="What should it call you?" data-testid="input-user-name" />
+
+    <label class="lbl" for="s-style">How it should talk</label>
+    <select class="field" id="s-style" data-testid="select-style">
+      <option value="friendly">Friendly and concise</option>
+      <option value="direct">Short and direct</option>
+      <option value="detailed">Detailed and thorough</option>
+      <option value="coach">Encouraging coach</option>
+    </select>
+
+    <h3 class="sec">AI engine</h3>
+    <div class="seg" role="radiogroup" id="engine-seg">
+      <label><input type="radio" name="engine" value="gemini" checked /><span>Gemini (free key)</span></label>
+      <label><input type="radio" name="engine" value="local" /><span>On my phone</span></label>
+    </div>
+
+    <div id="gemini-box">
+      <p class="help">Smartest option. Get a free key in about a minute: open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>, sign in, tap "Create API key", and paste it here. No card needed.</p>
+      <label class="lbl" for="s-key">Gemini API key</label>
+      <input class="field" id="s-key" type="password" autocomplete="off" placeholder="AIza…" data-testid="input-api-key" />
+      <label class="lbl" for="s-model">Model</label>
+      <select class="field" id="s-model" data-testid="select-model">
+        <option value="auto">Auto (best free model, falls back if limit hit)</option>
+      </select>
+      <button type="button" class="btn ghost" id="test-key" data-testid="button-test-key">Check key</button>
+      <p class="help" id="key-status"></p>
+    </div>
+
+    <div id="local-box" hidden>
+      <p class="help">Runs entirely on your phone with no account at all. It's slower and less smart, and the first time it downloads a model (about 0.9 to 1.6 GB, use Wi-Fi). Needs a recent Chrome, Edge, or Safari (iOS 26+).</p>
+      <label class="lbl" for="s-local">Model</label>
+      <select class="field" id="s-local" data-testid="select-local-model">
+        <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Light: Llama 3.2 1B (fastest)</option>
+        <option value="Qwen2.5-1.5B-Instruct-q4f32_1-MLC">Balanced: Qwen 2.5 1.5B</option>
+        <option value="Qwen2.5-3B-Instruct-q4f32_1-MLC">Smarter: Qwen 2.5 3B (newer phones)</option>
+      </select>
+      <p class="help" id="gpu-status"></p>
+    </div>
+
+    <h3 class="sec">Privacy</h3>
+    <label class="lbl" for="s-pin">Passcode</label>
+    <input class="field" id="s-pin" type="password" inputmode="numeric" placeholder="Leave blank for none" data-testid="input-set-passcode" />
+    <p class="help">Locks the app on this device. Since everything is stored on your phone, nobody else can see your chats or use your key.</p>
+
+    <h3 class="sec">Backup</h3>
+    <div class="row">
+      <button type="button" class="btn ghost" id="export" data-testid="button-export">Export backup</button>
+      <label class="btn ghost file-btn" data-testid="button-import">Import backup<input type="file" id="import" accept="application/json" hidden /></label>
+    </div>
+    <button type="button" class="btn danger" id="wipe" data-testid="button-wipe">Erase everything</button>
+
+    <div class="sheet-foot"><button class="btn primary wide" value="save" id="save-settings" data-testid="button-save-settings">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="memory" class="sheet">
+  <form method="dialog" class="sheet-body">
+    <div class="sheet-head"><h2>What it knows about you</h2><button class="icon-btn" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <label class="lbl" for="m-about">About me</label>
+    <textarea class="field" id="m-about" rows="4" placeholder="e.g. I live in Lincoln, CA. I build websites for small businesses. I like short answers." data-testid="input-about"></textarea>
+    <h3 class="sec">Saved memories</h3>
+    <p class="help">Say "remember that…" in a chat and it saves the fact here. Delete anything you don't want it to keep.</p>
+    <ul class="mem-list" id="mem-list"></ul>
+    <div class="row">
+      <input class="field" id="m-new" placeholder="Add a memory" data-testid="input-new-memory" />
+      <button type="button" class="btn ghost" id="m-add" data-testid="button-add-memory">Add</button>
+    </div>
+    <div class="sheet-foot"><button class="btn primary wide" value="save" id="save-memory" data-testid="button-save-memory">Done</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
