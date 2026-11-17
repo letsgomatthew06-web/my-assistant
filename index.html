@@ -43,6 +43,14 @@
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
+    <div class="biz-switch">
+      <label class="lbl tight" for="biz-select">Business</label>
+      <div class="row nomargin">
+        <select class="field" id="biz-select" data-testid="select-business"></select>
+        <button class="icon-btn boxed" id="edit-biz" aria-label="Edit business" data-testid="button-edit-business"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></svg></button>
+      </div>
+    </div>
+    <nav class="side-nav" id="side-nav"></nav>
     <button class="btn primary wide" id="new-chat" data-testid="button-new-chat">
       <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg> New chat
     </button>
@@ -72,6 +80,8 @@
       </button>
     </header>
 
+    <section class="view" id="view-chat">
+    <div class="quick" id="quick"></div>
     <div class="thread" id="thread" aria-live="polite"></div>
 
     <form class="composer" id="composer">
@@ -83,7 +93,63 @@
       </div>
       <p class="fine" id="fine">Your chats stay on this device.</p>
     </form>
+    </section>
+
+    <section class="view page" id="view-today" hidden>
+      <div class="page-inner">
+        <p class="eyebrow" id="today-date"></p>
+        <h2 class="page-title" id="today-hello">Good morning</h2>
+        <div class="card" id="brief-card">
+          <div class="card-head"><h3>Your brief</h3><button class="btn ghost sm" id="brief-btn" data-testid="button-brief">Write my brief</button></div>
+          <div class="bubble" id="brief-body" data-testid="text-brief"><p class="help">Tap "Write my brief" and your assistant will look at your business and tasks and tell you what to focus on today.</p></div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="card">
+          <div class="card-head"><h3>Up next</h3><button class="btn ghost sm" data-go="tasks">All tasks</button></div>
+          <ul class="task-list" id="today-tasks"></ul>
+        </div>
+        <div class="card" id="today-drafts-card">
+          <div class="card-head"><h3>Waiting for your OK</h3><button class="btn ghost sm" data-go="drafts">All drafts</button></div>
+          <div id="today-drafts"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view page" id="view-tasks" hidden>
+      <div class="page-inner">
+        <h2 class="page-title">Tasks</h2>
+        <p class="muted">Add your own, or ask in chat. Your assistant can add tasks for you.</p>
+        <form class="row" id="task-form"><input class="field" id="task-input" placeholder="Add a task" data-testid="input-task" /><button class="btn primary" data-testid="button-add-task">Add</button></form>
+        <div class="row"><button class="btn ghost sm" id="plan-tasks" data-testid="button-plan-tasks">Suggest tasks for my business</button></div>
+        <ul class="task-list" id="task-list"></ul>
+        <details class="done-wrap"><summary id="done-sum">Done</summary><ul class="task-list" id="done-list"></ul></details>
+      </div>
+    </section>
+
+    <section class="view page" id="view-drafts" hidden>
+      <div class="page-inner">
+        <h2 class="page-title">Drafts</h2>
+        <p class="muted">Emails, posts and messages your assistant wrote. Nothing goes out until you approve and send it.</p>
+        <div class="row" id="draft-actions"></div>
+        <div id="draft-list"></div>
+      </div>
+    </section>
+
+    <section class="view page" id="view-sites" hidden>
+      <div class="page-inner">
+        <h2 class="page-title">Websites</h2>
+        <p class="muted">Describe a site and your assistant builds it. Preview it here and download the file.</p>
+        <form id="site-form" class="card">
+          <label class="lbl tight" for="site-prompt">What should the site be?</label>
+          <textarea class="field" id="site-prompt" rows="3" placeholder="e.g. A one-page site for my lawn care business in Lincoln, CA with services, prices and a contact button" data-testid="input-site-prompt"></textarea>
+          <div class="row"><button class="btn primary" id="site-build" data-testid="button-build-site">Build it</button><button type="button" class="btn ghost" id="site-from-biz" data-testid="button-site-from-business">Use my business info</button></div>
+          <p class="help" id="site-status"></p>
+        </form>
+        <div id="site-list"></div>
+      </div>
+    </section>
   </main>
+  <nav class="tabbar only-mobile-flex" id="tabbar"></nav>
 </div>
 
 <!-- Sheets -->
@@ -163,6 +229,33 @@
       <button type="button" class="btn ghost" id="m-add" data-testid="button-add-memory">Add</button>
     </div>
     <div class="sheet-foot"><button class="btn primary wide" value="save" id="save-memory" data-testid="button-save-memory">Done</button></div>
+  </form>
+</dialog>
+
+<dialog id="biz" class="sheet">
+  <form method="dialog" class="sheet-body">
+    <div class="sheet-head"><h2 id="biz-title">Your business</h2><button class="icon-btn" value="close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <p class="help">Your assistant uses this to give advice, write drafts and build sites that fit. Leave it on "Personal" if you only want a personal assistant.</p>
+    <label class="lbl" for="b-name">Name</label><input class="field" id="b-name" placeholder="e.g. SiteFlip" data-testid="input-biz-name" />
+    <label class="lbl" for="b-idea">What it does</label><textarea class="field" id="b-idea" rows="3" placeholder="e.g. Finds small businesses with outdated websites and builds them new ones" data-testid="input-biz-idea"></textarea>
+    <label class="lbl" for="b-who">Who it's for</label><input class="field" id="b-who" placeholder="e.g. Local shops and contractors around Sacramento" data-testid="input-biz-who" />
+    <label class="lbl" for="b-offer">Offer and price</label><input class="field" id="b-offer" placeholder="e.g. New website for $499, $29/mo hosting" data-testid="input-biz-offer" />
+    <label class="lbl" for="b-goal">Current goal</label><input class="field" id="b-goal" placeholder="e.g. Land the first 5 paying customers" data-testid="input-biz-goal" />
+    <div class="row"><button type="button" class="btn danger" id="b-delete" data-testid="button-delete-business">Delete this business</button></div>
+    <div class="sheet-foot"><button class="btn primary wide" value="save" id="b-save" data-testid="button-save-business">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="viewer" class="viewer">
+  <div class="viewer-bar">
+    <button class="icon-btn" id="v-close" aria-label="Close preview"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <span id="v-title" class="v-title"></span>
+    <div class="seg mini" id="v-size"><label><input type="radio" name="vs" value="phone" checked /><span>Phone</span></label><label><input type="radio" name="vs" value="full" /><span>Full</span></label></div>
+  </div>
+  <div class="viewer-stage"><iframe id="v-frame" title="Website preview" sandbox="allow-scripts allow-popups"></iframe></div>
+  <form class="viewer-edit" id="v-edit">
+    <input class="field" id="v-change" placeholder="Ask for a change, e.g. make it blue and add reviews" data-testid="input-site-change" />
+    <button class="btn primary" id="v-apply" data-testid="button-site-change">Update</button>
   </form>
 </dialog>
 

@@ -25,6 +25,13 @@ const defaults = () => ({
   memories: [],
   chats: [],
   current: null,
+  projects: [],
+  active: "personal",
+  tasks: [],
+  drafts: [],
+  sites: [],
+  briefs: {},
+  view: "today",
 });
 let S = load();
 function load() {
@@ -77,8 +84,8 @@ $("#lock-now").addEventListener("click", () => {
 
 function openApp() {
   $("#app").hidden = false;
-  if (!S.current || !S.chats.find((c) => c.id === S.current)) S.current = S.chats[0]?.id || null;
-  refreshChrome(); renderList(); renderThread();
+  if (!S.current || !S.chats.find((c) => c.id === S.current)) S.current = null;
+  renderBizSelect(); renderNav(); show(S.view || "today");
   if (!persistent) $("#fine").textContent = "This browser blocks saving, so chats clear when you close it.";
 }
 
@@ -92,7 +99,8 @@ function refreshChrome() {
   else if (S.settings.key) { pill.textContent = "Gemini"; pill.className = "engine-pill ok"; }
   else { pill.textContent = "Not set up"; pill.className = "engine-pill"; }
   const c = curChat();
-  $("#chat-title").textContent = c ? c.title : "New chat";
+  const titles = { today: "Today", tasks: "Tasks", drafts: "Drafts", sites: "Websites" };
+  $("#chat-title").textContent = S.view === "chat" ? (c ? c.title : "New chat") : titles[S.view] || "";
   $("#input").placeholder = `Message ${S.settings.name || "your assistant"}…`;
 }
 const curChat = () => S.chats.find((c) => c.id === S.current);
@@ -100,13 +108,14 @@ const curChat = () => S.chats.find((c) => c.id === S.current);
 function renderList() {
   const list = $("#chat-list");
   list.innerHTML = "";
-  if (!S.chats.length) { list.innerHTML = `<p class="help" style="padding:0 10px">Your chats will show up here.</p>`; return; }
+  const chats = S.chats.filter((c) => (c.pid || "personal") === S.active);
+  if (!chats.length) { list.innerHTML = `<p class="help" style="padding:0 10px">Your chats will show up here.</p>`; return; }
   const lbl = document.createElement("div"); lbl.className = "list-label"; lbl.textContent = "Recent"; list.append(lbl);
-  for (const c of S.chats) {
+  for (const c of chats) {
     const row = document.createElement("div");
     row.className = "chat-item" + (c.id === S.current ? " active" : "");
     row.innerHTML = `<button class="open" data-testid="link-chat-${c.id}">${esc(c.title)}</button><button class="icon-btn del" aria-label="Delete chat" data-testid="button-delete-chat-${c.id}"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`;
-    row.querySelector(".open").onclick = () => { S.current = c.id; save(); closeDrawer(); refreshChrome(); renderList(); renderThread(); };
+    row.querySelector(".open").onclick = () => { S.current = c.id; save(); closeDrawer(); show("chat"); };
     row.querySelector(".del").onclick = () => {
       S.chats = S.chats.filter((x) => x.id !== c.id);
       if (S.current === c.id) S.current = S.chats[0]?.id || null;
@@ -121,6 +130,12 @@ const SUGGEST = [
   "Help me write a quick, friendly email",
   "Explain something to me like I'm new to it",
   "Give me a few dinner ideas with what I have",
+];
+const BIZ_SUGGEST = [
+  "Find 5 types of local businesses that would buy this and how to reach them",
+  "Draft a short cold email to a potential customer",
+  "Write 3 social posts to announce what I offer",
+  "Give me a 7-day plan to land my first customer",
 ];
 function renderThread() {
   const th = $("#thread");
@@ -142,9 +157,10 @@ function renderThread() {
       $("#go-local").onclick = () => openSettings("local");
       return;
     }
-    w.innerHTML = `<h2>${hi}<br>What can I help with?</h2><p>I remember what you tell me, and everything stays on this device.</p><div class="suggest"></div>`;
+    const bz = biz();
+    w.innerHTML = `<h2>${hi}<br>${bz ? `What should we do for ${esc(bz.name)}?` : "What can I help with?"}</h2><p>I remember what you tell me, and everything stays on this device.</p><div class="suggest"></div>`;
     const g = w.querySelector(".suggest");
-    SUGGEST.forEach((s, i) => { const b = document.createElement("button"); b.textContent = s; b.dataset.testid = "button-suggest-" + i; b.onclick = () => { $("#input").value = s; autosize(); $("#input").focus(); }; g.append(b); });
+    (bz ? BIZ_SUGGEST : SUGGEST).forEach((s, i) => { const b = document.createElement("button"); b.textContent = s; b.dataset.testid = "button-suggest-" + i; b.onclick = () => { $("#input").value = s; autosize(); $("#input").focus(); }; g.append(b); });
     th.append(w);
     return;
   }
@@ -160,6 +176,8 @@ function msgEl(m, last) {
     b.innerHTML = renderMd(m.content);
     b.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
     if (m.saved?.length) { const n = document.createElement("div"); n.className = "mem-note"; n.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>Saved to memory: ${esc(m.saved.join("; "))}`; b.append(n); }
+    if (m.tasks?.length) { const n = document.createElement("div"); n.className = "inline-note"; n.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Added ${m.tasks.length} task${m.tasks.length > 1 ? "s" : ""}. <button type="button">View tasks</button></span>`; n.querySelector("button").onclick = () => show("tasks"); b.append(n); }
+    if (m.drafts?.length) for (const id of m.drafts) { const d = S.drafts.find((x) => x.id === id); if (!d) continue; const n = document.createElement("div"); n.className = "inline-note"; n.innerHTML = `<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 7l8 6 8-6"/></svg><span>Draft ready: ${esc(d.title)}. <button type="button">Review it</button></span>`; n.querySelector("button").onclick = () => show("drafts"); b.append(n); }
     const tools = document.createElement("div"); tools.className = "msg-tools";
     const cp = document.createElement("button"); cp.textContent = "Copy"; cp.onclick = async () => { try { await navigator.clipboard.writeText(m.content); toast("Copied"); } catch { toast("Couldn't copy on this browser"); } };
     tools.append(cp);
@@ -175,7 +193,7 @@ const closeDrawer = () => $("#app").classList.remove("drawer-open");
 $("#open-drawer").onclick = openDrawer;
 $("#close-drawer").onclick = closeDrawer;
 $("#scrim").onclick = closeDrawer;
-$("#new-chat").onclick = () => { S.current = null; save(); closeDrawer(); refreshChrome(); renderList(); renderThread(); $("#input").focus(); };
+$("#new-chat").onclick = () => { S.current = null; save(); closeDrawer(); show("chat"); $("#input").focus(); };
 
 /* ---------- composer ---------- */
 const input = $("#input");
@@ -192,7 +210,7 @@ $("#composer").addEventListener("submit", async (e) => {
   if (!text) return;
   if (!engineReady()) { openSettings("gemini"); return; }
   let c = curChat();
-  if (!c) { c = { id: uid(), title: text.slice(0, 48), messages: [] }; S.chats.unshift(c); S.current = c.id; }
+  if (!c) { c = { id: uid(), title: text.slice(0, 48), messages: [], pid: S.active }; S.chats.unshift(c); S.current = c.id; }
   else { S.chats = [c, ...S.chats.filter((x) => x.id !== c.id)]; }
   c.messages.push({ role: "user", content: text });
   input.value = ""; autosize(); save(); refreshChrome(); renderList(); renderThread();
@@ -225,17 +243,37 @@ function systemPrompt() {
   let p = `You are ${s.name || "Assistant"}, a private personal assistant for one person${s.user ? `, ${s.user}` : ""}. ${STYLE[s.style] || STYLE.friendly}
 Current date and time: ${now}.
 You help with planning, writing, ideas, explanations, decisions, reminders-to-self, and everyday questions. Format with short paragraphs and Markdown lists when useful. If you don't know something or it may be outdated, say so honestly.
-MEMORY: When the user asks you to remember something, or shares a lasting personal fact or preference they'd clearly want you to keep, add one line at the very end of your reply in exactly this form: [[remember: short fact in third person]]. Use one line per fact. Never mention this tag.`;
+You act like a hands-on assistant and AI employee: you don't just advise, you produce the actual work (plans, drafts, task lists). You can't send anything or browse the web yourself; the user approves and sends drafts.
+SPECIAL TAGS (the app turns these into saved items; never mention or explain them):
+- MEMORY: When the user asks you to remember something, or shares a lasting fact or preference, add on its own line: [[remember: short fact in third person]]
+- TASKS: When you propose concrete to-dos the user should do, or they ask you to add a task, add one line per task: [[task: short action starting with a verb]]
+- DRAFTS: When you write an email, social post, text message, or other message meant to be sent, put the final copy inside a draft block instead of in the normal reply:
+[[draft: email | Short title]]
+Subject: ...
+
+Body...
+[[/draft]]
+Use kind email, post, message, or other. Then briefly tell the user it's in their Drafts for review.`;
+  const bz = biz();
+  if (bz) p += `\n\nThe user is working on their business. Business profile:\nName: ${bz.name}\nWhat it does: ${bz.idea || "-"}\nWho it's for: ${bz.who || "-"}\nOffer and price: ${bz.offer || "-"}\nCurrent goal: ${bz.goal || "-"}`;
+  const open = curTasks().filter((t) => !t.done).slice(0, 15);
+  if (open.length) p += `\n\nThe user's open tasks:\n${open.map((t) => "- " + t.text).join("\n")}`;
   if (S.about.trim()) p += `\n\nAbout the user (written by them):\n${S.about.trim()}`;
   if (S.memories.length) p += `\n\nThings you've remembered about the user:\n${S.memories.map((m) => "- " + m.text).join("\n")}`;
   return p;
 }
 function stripTags(t) {
-  const saved = [];
-  let out = t.replace(/\[\[remember:\s*([^\]]+?)\]\]/gi, (_, f) => { saved.push(f.trim()); return ""; });
+  const saved = [], tasks = [], drafts = [];
+  let out = t.replace(/\[\[draft:\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]\]([\s\S]*?)\[\[\/draft\]\]/gi, (_, k, title, body) => {
+    drafts.push({ kind: (k || "other").trim().toLowerCase(), title: (title || "Draft").trim(), body: body.trim() }); return "";
+  });
+  const od = out.search(/\[\[draft:/i);
+  if (od !== -1) out = out.slice(0, od);
+  out = out.replace(/\[\[remember:\s*([^\]]+?)\]\]/gi, (_, f) => { saved.push(f.trim()); return ""; });
+  out = out.replace(/\[\[task:\s*([^\]]+?)\]\]/gi, (_, f) => { tasks.push(f.trim()); return ""; });
   const open = out.lastIndexOf("[[");
   if (open !== -1 && out.indexOf("]]", open) === -1) out = out.slice(0, open);
-  return { text: out.trim(), saved };
+  return { text: out.replace(/\n{3,}/g, "\n\n").trim(), saved, tasks, drafts };
 }
 
 /* ---------- respond ---------- */
@@ -256,8 +294,7 @@ async function respond(c) {
   };
   try {
     const history = c.messages.slice(-30);
-    if (S.settings.engine === "local") await runLocal(history, onText, b, abort.signal);
-    else await runGemini(history, onText, abort.signal);
+    await generate({ system: systemPrompt(), messages: history, onText, signal: abort.signal, bubble: b });
     finish();
   } catch (err) {
     if (err.name === "AbortError") { finish(true); }
@@ -265,10 +302,13 @@ async function respond(c) {
   } finally { setBusy(false); abort = null; }
 
   function finish(stopped) {
-    const { text, saved } = stripTags(raw);
-    if (!text && !saved.length) { row.remove(); if (!stopped) showError(new Error("The AI sent back an empty reply. Try again.")); return; }
+    const { text, saved, tasks, drafts } = stripTags(raw);
+    if (!text && !saved.length && !tasks.length && !drafts.length) { row.remove(); if (!stopped) showError(new Error("The AI sent back an empty reply. Try again.")); return; }
     for (const f of saved) if (!S.memories.some((m) => m.text.toLowerCase() === f.toLowerCase())) S.memories.push({ id: uid(), text: f });
-    c.messages.push({ role: "assistant", content: text || "(saved to memory)", saved: saved.length ? saved : undefined });
+    for (const t of tasks) addTask(t, true);
+    const dids = drafts.map((d) => addDraft(d));
+    c.messages.push({ role: "assistant", content: text || "Done.", saved: saved.length ? saved : undefined, tasks: tasks.length ? tasks : undefined, drafts: dids.length ? dids : undefined });
+    renderNav();
     if (c.messages.length === 2 && c.title.length >= 48) c.title = c.title.trim() + "…";
     save(); renderThread();
   }
@@ -290,11 +330,21 @@ function modelOrder() {
   const extra = avail.filter((m) => /flash/.test(m) && !/image|tts|live|audio|embed|preview|exp/.test(m) && !ordered.includes(m));
   return [...ordered, ...extra].length ? [...ordered, ...extra] : PREFERRED;
 }
-async function runGemini(history, onText, signal) {
+async function generate({ system, messages, onText, signal, bubble, maxTokens }) {
+  if (!engineReady()) throw new Error("Set up your AI in Settings first.");
+  if (S.settings.engine === "local") return runLocal(system, messages, onText, bubble, signal, maxTokens);
+  return runGemini(system, messages, onText, signal, maxTokens);
+}
+async function ask(system, prompt, opts = {}) {
+  let out = "";
+  await generate({ system, messages: [{ role: "user", content: prompt }], onText: (t) => { out += t; opts.onText?.(out); }, signal: opts.signal, bubble: opts.bubble, maxTokens: opts.maxTokens });
+  return out;
+}
+async function runGemini(system, history, onText, signal, maxTokens) {
   const body = {
-    systemInstruction: { parts: [{ text: systemPrompt() }] },
+    systemInstruction: { parts: [{ text: system }] },
     contents: history.map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] })),
-    generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+    generationConfig: { temperature: 0.7, maxOutputTokens: maxTokens || 4096 },
   };
   let lastErr;
   for (const model of modelOrder()) {
@@ -340,10 +390,11 @@ async function listModels(key) {
 
 /* ---------- On-device (WebLLM) ---------- */
 let engine = null, engineModel = null, webllm = null;
-async function runLocal(history, onText, bubble, signal) {
+async function runLocal(system, history, onText, bubble, signal, maxTokens) {
   if (!navigator.gpu) throw new Error("This browser can't run AI on-device (no WebGPU). Use the free Gemini key instead, or try the latest Chrome.");
   const model = S.settings.localModel;
   if (!engine || engineModel !== model) {
+    if (!bubble) { bubble = document.createElement("div"); (document.querySelector("#site-status") || document.body).append(bubble); }
     bubble.innerHTML = `<div class="help" data-testid="text-load-progress">Loading the on-device model… first time can take a few minutes.</div><div class="progress"><span></span></div>`;
     const bar = bubble.querySelector(".progress span"); const lab = bubble.querySelector(".help");
     webllm = webllm || (await import(WEBLLM_URL));
@@ -354,10 +405,10 @@ async function runLocal(history, onText, bubble, signal) {
     engineModel = model;
     bubble.innerHTML = `<span class="typing"><i></i><i></i><i></i></span>`;
   }
-  const messages = [{ role: "system", content: systemPrompt() }, ...history.slice(-12).map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }))];
-  const stream = await engine.chat.completions.create({ messages, stream: true, temperature: 0.7, max_tokens: 1024 });
+  const messages = [{ role: "system", content: system }, ...history.slice(-12).map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }))];
+  const stream = await engine.chat.completions.create({ messages, stream: true, temperature: 0.7, max_tokens: maxTokens ? Math.min(maxTokens, 3000) : 1024 });
   for await (const ch of stream) {
-    if (signal.aborted) { try { engine.interruptGenerate(); } catch {} const e = new Error("stopped"); e.name = "AbortError"; throw e; }
+    if (signal?.aborted) { try { engine.interruptGenerate(); } catch {} const e = new Error("stopped"); e.name = "AbortError"; throw e; }
     const t = ch.choices?.[0]?.delta?.content; if (t) onText(t);
   }
 }
@@ -407,7 +458,7 @@ $("#save-settings").addEventListener("click", async (e) => {
   s.model = $("#s-model").value; s.localModel = $("#s-local").value;
   const pin = $("#s-pin").value;
   if (pin) s.pinHash = await sha(pin);
-  save(); dlg.close(); refreshChrome(); renderThread();
+  save(); dlg.close(); show(S.view);
   toast(pin ? "Saved. Passcode set." : "Saved");
 });
 $("#export").onclick = () => {
@@ -445,6 +496,321 @@ $("#m-add").onclick = () => { const v = $("#m-new").value.trim(); if (!v) return
 $("#m-new").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#m-add").click(); } });
 $("#save-memory").addEventListener("click", (e) => { e.preventDefault(); S.about = $("#m-about").value; save(); mdlg.close(); toast("Saved"); });
 [dlg, mdlg].forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) d.close(); }));
+
+/* ================= Workspace: business, nav, today, tasks, drafts, sites ================= */
+function biz() { return S.active === "personal" ? null : S.projects.find((p) => p.id === S.active) || null; }
+const curTasks = () => S.tasks.filter((t) => (t.pid || "personal") === S.active);
+const curDrafts = () => S.drafts.filter((d) => (d.pid || "personal") === S.active);
+const curSites = () => S.sites.filter((x) => (x.pid || "personal") === S.active);
+const today = () => new Date().toISOString().slice(0, 10);
+
+const ICONS = {
+  today: '<path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  tasks: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+  drafts: '<path d="M4 4h16v16H4z"/><path d="M4 7l8 6 8-6"/>',
+  sites: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/>',
+};
+const VIEWS = [["today", "Today"], ["chat", "Chat"], ["tasks", "Tasks"], ["drafts", "Drafts"], ["sites", "Sites"]];
+function renderNav() {
+  const counts = { tasks: curTasks().filter((t) => !t.done).length, drafts: curDrafts().filter((d) => d.status === "pending").length };
+  const side = $("#side-nav"), bar = $("#tabbar");
+  side.innerHTML = ""; bar.innerHTML = "";
+  for (const [v, label] of VIEWS) {
+    const ic = `<svg viewBox="0 0 24 24">${ICONS[v]}</svg>`;
+    const n = counts[v] || 0;
+    const a = document.createElement("button");
+    a.className = "nav-btn" + (S.view === v ? " active" : ""); a.dataset.testid = "nav-" + v;
+    a.innerHTML = `${ic}<span>${label}</span>${n ? `<span class="count">${n}</span>` : ""}`;
+    a.onclick = () => { closeDrawer(); show(v); };
+    side.append(a);
+    const t = document.createElement("button");
+    t.className = "tab" + (S.view === v ? " active" : ""); t.dataset.testid = "tab-" + v;
+    t.innerHTML = `${ic}<span>${label}</span>${n && v === "drafts" ? `<span class="dot">${n}</span>` : ""}`;
+    t.onclick = () => show(v);
+    bar.append(t);
+  }
+}
+function show(v) {
+  S.view = v; save();
+  for (const [x] of VIEWS) $("#view-" + x).hidden = x !== v;
+  $("#new-chat").hidden = v !== "chat";
+  $("#chat-list").hidden = v !== "chat";
+  renderNav(); refreshChrome();
+  if (v === "chat") { renderList(); renderQuick(); renderThread(); }
+  if (v === "today") renderToday();
+  if (v === "tasks") renderTasks();
+  if (v === "drafts") renderDrafts();
+  if (v === "sites") renderSites();
+}
+document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) show(g.dataset.go); });
+
+/* ----- business switcher ----- */
+function renderBizSelect() {
+  const sel = $("#biz-select");
+  sel.innerHTML = `<option value="personal">Personal</option>` + S.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("") + `<option value="__new">+ Add a business</option>`;
+  sel.value = S.active;
+}
+$("#biz-select").onchange = (e) => {
+  if (e.target.value === "__new") { e.target.value = S.active; openBiz(null); return; }
+  S.active = e.target.value; S.current = null; save(); show(S.view);
+};
+let editingBiz = null;
+function openBiz(id) {
+  editingBiz = id;
+  const p = S.projects.find((x) => x.id === id) || {};
+  $("#biz-title").textContent = id ? "Edit business" : "Add a business";
+  $("#b-name").value = p.name || ""; $("#b-idea").value = p.idea || ""; $("#b-who").value = p.who || "";
+  $("#b-offer").value = p.offer || ""; $("#b-goal").value = p.goal || "";
+  $("#b-delete").hidden = !id;
+  closeDrawer(); $("#biz").showModal();
+}
+$("#edit-biz").onclick = () => openBiz(S.active === "personal" ? null : S.active);
+$("#b-save").addEventListener("click", (e) => {
+  e.preventDefault();
+  const name = $("#b-name").value.trim();
+  if (!name) { $("#b-name").focus(); toast("Give your business a name"); return; }
+  const data = { name, idea: $("#b-idea").value.trim(), who: $("#b-who").value.trim(), offer: $("#b-offer").value.trim(), goal: $("#b-goal").value.trim() };
+  if (editingBiz) Object.assign(S.projects.find((x) => x.id === editingBiz), data);
+  else { const p = { id: uid(), ...data }; S.projects.push(p); S.active = p.id; S.current = null; }
+  save(); $("#biz").close(); renderBizSelect(); show(S.view); toast("Business saved");
+});
+let bizDelArmed = false;
+$("#b-delete").onclick = () => {
+  if (!bizDelArmed) { bizDelArmed = true; $("#b-delete").textContent = "Tap again to delete it and its tasks, drafts and sites"; setTimeout(() => { bizDelArmed = false; $("#b-delete").textContent = "Delete this business"; }, 4000); return; }
+  const id = editingBiz;
+  S.projects = S.projects.filter((p) => p.id !== id);
+  for (const k of ["tasks", "drafts", "sites", "chats"]) S[k] = S[k].filter((x) => x.pid !== id);
+  S.active = "personal"; save(); $("#biz").close(); renderBizSelect(); show(S.view); toast("Business deleted");
+};
+$("#biz").addEventListener("click", (e) => { if (e.target.id === "biz") $("#biz").close(); });
+
+/* ----- quick actions in chat ----- */
+function renderQuick() {
+  const q = $("#quick"); q.innerHTML = "";
+  if (!engineReady()) return;
+  const items = biz()
+    ? [["Draft outreach email", "Draft a short, friendly cold email I can send to a potential customer."], ["Social post", "Write a social media post that promotes what I offer."], ["Plan my week", "Make a plan for this week toward my current goal and add the tasks."], ["Find customers", "Who exactly should I reach out to first, and where do I find them? Add the next steps as tasks."], ["Build a website", null]]
+    : [["Plan my day", "Help me plan my day. Ask me what's on my plate if you need to, then add the tasks."], ["Write an email", "Help me write an email. Ask me who it's to and what it's about."], ["Quick idea", "Give me a quick, useful idea for something I could do today."], ["Build a website", null]];
+  for (const [label, prompt] of items) {
+    const b = document.createElement("button"); b.textContent = label; b.type = "button";
+    b.onclick = () => { if (!prompt) { show("sites"); $("#site-prompt").focus(); return; } input.value = prompt; $("#composer").requestSubmit(); };
+    q.append(b);
+  }
+}
+
+/* ----- tasks ----- */
+function addTask(text, quiet) {
+  if (curTasks().some((t) => !t.done && t.text.toLowerCase() === text.toLowerCase())) return;
+  S.tasks.unshift({ id: uid(), text, done: false, pid: S.active });
+  save(); if (!quiet) toast("Task added");
+}
+function taskEl(t) {
+  const li = document.createElement("li"); li.className = "task" + (t.done ? " done" : "");
+  li.innerHTML = `<input type="checkbox" ${t.done ? "checked" : ""} aria-label="Mark done" data-testid="checkbox-task-${t.id}" /><span class="t">${esc(t.text)}</span><button class="icon-btn" aria-label="Delete task"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+  li.querySelector("input").onchange = (e) => { t.done = e.target.checked; save(); renderNav(); if (S.view === "today") renderToday(); else renderTasks(); };
+  li.querySelector("button").onclick = () => { S.tasks = S.tasks.filter((x) => x.id !== t.id); save(); renderNav(); S.view === "today" ? renderToday() : renderTasks(); };
+  return li;
+}
+function renderTasks() {
+  const open = curTasks().filter((t) => !t.done), done = curTasks().filter((t) => t.done);
+  const ul = $("#task-list"); ul.innerHTML = "";
+  if (!open.length) ul.innerHTML = `<li class="empty-note">No open tasks. Add one above or ask your assistant to plan something.</li>`;
+  open.forEach((t) => ul.append(taskEl(t)));
+  const dl = $("#done-list"); dl.innerHTML = ""; done.forEach((t) => dl.append(taskEl(t)));
+  $("#done-sum").textContent = `Done (${done.length})`;
+  $("#plan-tasks").textContent = biz() ? `Suggest tasks for ${biz().name}` : "Suggest tasks for me";
+}
+$("#task-form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#task-input").value.trim(); if (!v) return; addTask(v); $("#task-input").value = ""; renderTasks(); renderNav(); });
+$("#plan-tasks").onclick = async () => {
+  const btn = $("#plan-tasks"); if (btn.disabled) return;
+  btn.disabled = true; const old = btn.textContent; btn.textContent = "Thinking…";
+  try {
+    const out = await ask(systemPrompt(), "Suggest the 5 most useful next tasks for me right now, based on what you know. Respond ONLY with [[task: ...]] lines, nothing else. Don't repeat tasks I already have.", { maxTokens: 800 });
+    const { tasks } = stripTags(out);
+    const lines = tasks.length ? tasks : out.split("\n").map((l) => l.replace(/^[-*\d.\s]+/, "").trim()).filter((l) => l && l.length < 140).slice(0, 5);
+    lines.forEach((t) => addTask(t, true)); toast(`Added ${lines.length} tasks`);
+  } catch (e) { toast(e.message); }
+  btn.disabled = false; btn.textContent = old; renderTasks(); renderNav();
+};
+
+/* ----- drafts ----- */
+function addDraft(d) {
+  const x = { id: uid(), kind: d.kind, title: d.title, body: d.body, status: "pending", pid: S.active, at: Date.now() };
+  S.drafts.unshift(x); save(); return x.id;
+}
+function parseEmail(body) {
+  const m = body.match(/^\s*subject:\s*(.+)\n+/i);
+  return m ? { subject: m[1].trim(), text: body.slice(m[0].length).trim() } : { subject: "", text: body };
+}
+function draftEl(d, compact) {
+  const el = document.createElement("div"); el.className = "draft"; el.dataset.testid = "card-draft-" + d.id;
+  el.innerHTML = `<div class="draft-top"><span class="tag kind">${esc(d.kind)}</span><h4>${esc(d.title)}</h4><span class="tag ${d.status === "approved" ? "ok" : ""}">${d.status === "approved" ? "Approved" : "Needs your OK"}</span></div>
+    <textarea class="field" aria-label="Draft text">${esc(d.body)}</textarea>
+    <div class="row"></div>`;
+  const ta = el.querySelector("textarea");
+  if (compact) ta.rows = 4;
+  ta.oninput = () => { d.body = ta.value; save(); };
+  const row = el.querySelector(".row");
+  const mk = (label, cls, fn, tid) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn sm " + cls; b.textContent = label; b.onclick = fn; if (tid) b.dataset.testid = tid; row.append(b); };
+  if (d.kind === "email") mk(d.status === "approved" ? "Open in email again" : "Approve & open email", "primary", () => {
+    const { subject, text } = parseEmail(d.body);
+    d.status = "approved"; save();
+    location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+    setTimeout(() => { renderNav(); S.view === "today" ? renderToday() : renderDrafts(); }, 300);
+  }, "button-approve-" + d.id);
+  else mk(d.status === "approved" ? "Copy again" : "Approve & copy", "primary", async () => {
+    try { await navigator.clipboard.writeText(d.body); toast("Copied. Paste it wherever you post."); } catch { toast("Copy blocked here. Select the text and copy it."); }
+    d.status = "approved"; save(); renderNav(); S.view === "today" ? renderToday() : renderDrafts();
+  }, "button-approve-" + d.id);
+  if (navigator.share) mk("Share", "ghost", () => navigator.share({ text: d.body }).catch(() => {}));
+  mk("Rewrite", "ghost", async (e) => {
+    const b = e.target; b.disabled = true; b.textContent = "Rewriting…";
+    try {
+      const out = await ask(systemPrompt(), `Rewrite this ${d.kind} so it's clearer, warmer and more likely to get a reply. Keep the same format (keep a "Subject:" line if it has one). Return only the rewritten text, no tags.\n\n${d.body}`, { maxTokens: 1500 });
+      d.body = stripTags(out).text || d.body; d.status = "pending"; save();
+    } catch (err) { toast(err.message); }
+    S.view === "today" ? renderToday() : renderDrafts(); renderNav();
+  });
+  mk("Delete", "ghost", () => { S.drafts = S.drafts.filter((x) => x.id !== d.id); save(); renderNav(); S.view === "today" ? renderToday() : renderDrafts(); });
+  return el;
+}
+function renderDrafts() {
+  const acts = $("#draft-actions"); acts.innerHTML = "";
+  const kinds = biz()
+    ? [["Cold email", "Draft a short cold email to a potential customer for my business."], ["Follow-up", "Draft a polite follow-up email to someone who didn't reply."], ["Social post", "Write a social post promoting my business."], ["Text message", "Write a short, friendly text message I can send to a past customer asking for a referral."]]
+    : [["Email", "Help me draft an email. Ask me who it's to and what it's about."], ["Text message", "Help me write a text message. Ask me what it's for."], ["Social post", "Help me write a social media post. Ask me what it's about."]];
+  for (const [label, prompt] of kinds) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn ghost sm"; b.textContent = "+ " + label;
+    b.onclick = () => { if (!engineReady()) { openSettings("gemini"); return; } S.current = null; show("chat"); input.value = prompt; $("#composer").requestSubmit(); };
+    acts.append(b);
+  }
+  const list = $("#draft-list"); list.innerHTML = "";
+  const ds = curDrafts();
+  if (!ds.length) { list.innerHTML = `<p class="empty-note">No drafts yet. Tap one of the buttons above, or ask for an email or post in chat.</p>`; return; }
+  ds.forEach((d) => list.append(draftEl(d)));
+}
+
+/* ----- today ----- */
+function renderToday() {
+  const now = new Date(); const h = now.getHours();
+  const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  $("#today-date").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) + (biz() ? " · " + biz().name : "");
+  $("#today-hello").textContent = part + (S.settings.user ? ", " + S.settings.user : "") + ".";
+  const key = S.active + ":" + today();
+  const br = S.briefs[key];
+  $("#brief-body").innerHTML = br ? renderMd(br) : `<p class="help">${engineReady() ? `Tap "Write my brief" and ${esc(S.settings.name || "your assistant")} will look at ${biz() ? "your business and " : ""}your tasks and tell you what to focus on today.` : `Set up your free AI first. <button type="button" class="btn ghost sm" id="brief-setup">Set up</button>`}</p>`;
+  $("#brief-setup")?.addEventListener("click", () => openSettings("gemini"));
+  $("#brief-btn").textContent = br ? "Refresh" : "Write my brief";
+  const open = curTasks().filter((t) => !t.done), doneToday = curTasks().filter((t) => t.done).length, pend = curDrafts().filter((d) => d.status === "pending");
+  $("#stats").innerHTML = `<div class="stat"><b>${open.length}</b><span>Open tasks</span></div><div class="stat"><b>${doneToday}</b><span>Done</span></div><div class="stat"><b>${pend.length}</b><span>Drafts to review</span></div>`;
+  const ul = $("#today-tasks"); ul.innerHTML = "";
+  if (!open.length) ul.innerHTML = `<li class="empty-note">Nothing open. Ask your assistant to plan your day.</li>`;
+  open.slice(0, 5).forEach((t) => ul.append(taskEl(t)));
+  const dc = $("#today-drafts"); dc.innerHTML = "";
+  $("#today-drafts-card").hidden = !pend.length;
+  pend.slice(0, 2).forEach((d) => dc.append(draftEl(d, true)));
+}
+$("#brief-btn").onclick = async () => {
+  if (!engineReady()) { openSettings("gemini"); return; }
+  const btn = $("#brief-btn"); if (btn.disabled) return; btn.disabled = true; btn.textContent = "Writing…";
+  const body = $("#brief-body"); body.innerHTML = `<span class="typing"><i></i><i></i><i></i></span>`;
+  const h = new Date().getHours();
+  try {
+    const out = await ask(systemPrompt(), `Write my ${h < 15 ? "morning" : "evening"} brief. Keep it short and skimmable:\n1. One line on where things stand${biz() ? " with the business" : ""}.\n2. "Today's focus": the top 3 things to do, most important first (use my open tasks if they're good; add new [[task: ...]] lines for any new ones).\n3. One quick win I can do in 10 minutes.\n${h >= 15 ? "Also ask what got done today." : ""}\nNo long intro.`, { onText: (t) => { body.innerHTML = renderMd(stripTags(t).text || "…"); }, bubble: body, maxTokens: 1200 });
+    const { text, tasks } = stripTags(out);
+    tasks.forEach((t) => addTask(t, true));
+    S.briefs[S.active + ":" + today()] = text; save();
+  } catch (e) { body.innerHTML = `<div class="err-bubble">${esc(e.message)}</div>`; btn.disabled = false; btn.textContent = "Try again"; return; }
+  btn.disabled = false; renderToday(); renderNav();
+};
+
+/* ----- websites ----- */
+const SITE_SYS = `You are an expert web designer. You build complete, beautiful, mobile-first single-file websites.
+Rules:
+- Output ONLY one complete HTML document starting with <!doctype html>. No explanation, no Markdown fences.
+- All CSS in one <style> tag. Any JS minimal and inline. You may load Google Fonts. No other external files, frameworks, or image URLs.
+- For visuals use CSS gradients, shapes, inline SVG icons and illustrations, or emoji. Never use broken image links.
+- Make it look professionally designed: strong typography, a clear hero, good spacing, a distinctive color palette that fits the business, and clear call-to-action buttons (tel:, mailto:, or #contact).
+- Fully responsive; must look great on a phone at 375px wide.
+- Use realistic, specific copy based on the details given. Use clearly fake placeholders only for unknown phone numbers or emails, like (555) 123-4567.`;
+function cleanHtml(t) {
+  let h = t.trim().replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const i = h.search(/<!doctype html|<html/i); if (i > 0) h = h.slice(i);
+  return h;
+}
+let siteBusy = false;
+async function buildSite(prompt, existing) {
+  if (!engineReady()) { openSettings("gemini"); return null; }
+  if (siteBusy) return null; siteBusy = true;
+  const st = $("#site-status");
+  st.textContent = "Building your site… this can take up to a minute.";
+  const bz = biz();
+  const ctx = bz ? `\n\nBusiness details: ${bz.name}. ${bz.idea || ""} For: ${bz.who || ""}. Offer: ${bz.offer || ""}.` : "";
+  const req = existing
+    ? `Here is the current website HTML:\n\n${existing}\n\nApply this change and return the full updated HTML document: ${prompt}`
+    : `Build this website: ${prompt}${ctx}`;
+  try {
+    const out = await ask(SITE_SYS, req, { maxTokens: 16000, onText: (t) => { st.textContent = `Building your site… ${Math.round(t.length / 1000)}k characters written`; } });
+    const html = cleanHtml(out);
+    if (!/<\/html>/i.test(html) && !/<body/i.test(html)) throw new Error("The AI didn't return a full page. Try again, or describe the site in a bit more detail.");
+    st.textContent = ""; return html;
+  } catch (e) { st.textContent = e.message; return null; }
+  finally { siteBusy = false; }
+}
+$("#site-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const p = $("#site-prompt").value.trim(); if (!p) { $("#site-prompt").focus(); return; }
+  const btn = $("#site-build"); btn.disabled = true;
+  const html = await buildSite(p);
+  btn.disabled = false;
+  if (!html) return;
+  const name = (html.match(/<title>([^<]{1,80})<\/title>/i)?.[1] || p.slice(0, 40)).trim();
+  const site = { id: uid(), name, prompt: p, html, pid: S.active, at: Date.now() };
+  S.sites.unshift(site); save(); $("#site-prompt").value = ""; renderSites(); openViewer(site.id);
+});
+$("#site-from-biz").onclick = () => {
+  const bz = biz();
+  if (!bz) { toast("Add a business first (top of the menu)."); openBiz(null); return; }
+  $("#site-prompt").value = `A one-page website for ${bz.name}. ${bz.idea || ""} It's for ${bz.who || "local customers"}. Offer: ${bz.offer || "contact for pricing"}. Include a hero, services, how it works, pricing, a few short testimonials, FAQ, and a contact section.`;
+};
+function downloadSite(s) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([s.html], { type: "text/html" }));
+  a.download = (s.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "site") + ".html"; a.click();
+}
+function renderSites() {
+  const list = $("#site-list"); list.innerHTML = "";
+  $("#site-from-biz").hidden = !biz();
+  const ss = curSites();
+  if (!ss.length) { list.innerHTML = `<p class="empty-note">No sites yet. Describe one above.</p>`; return; }
+  for (const s of ss) {
+    const el = document.createElement("div"); el.className = "site"; el.dataset.testid = "card-site-" + s.id;
+    el.innerHTML = `<div class="thumb"><iframe sandbox="" tabindex="-1" aria-hidden="true"></iframe></div><div class="info"><b>${esc(s.name)}</b><span>${new Date(s.at).toLocaleDateString()}</span></div><div class="acts"><button class="btn primary sm" data-a="open">Open</button><button class="btn ghost sm" data-a="dl">Download</button><button class="btn ghost sm" data-a="del">Delete</button></div>`;
+    el.querySelector("iframe").srcdoc = s.html;
+    el.querySelector('[data-a="open"]').onclick = () => openViewer(s.id);
+    el.querySelector('[data-a="dl"]').onclick = () => downloadSite(s);
+    el.querySelector('[data-a="del"]').onclick = () => { S.sites = S.sites.filter((x) => x.id !== s.id); save(); renderSites(); };
+    list.append(el);
+  }
+}
+let viewing = null;
+function openViewer(id) {
+  const s = S.sites.find((x) => x.id === id); if (!s) return;
+  viewing = s; $("#v-title").textContent = s.name; $("#v-frame").srcdoc = s.html;
+  $(".viewer-stage").classList.toggle("phone", document.querySelector('input[name="vs"]:checked').value === "phone");
+  $("#viewer").showModal();
+}
+$("#v-close").onclick = () => $("#viewer").close();
+document.querySelectorAll('input[name="vs"]').forEach((r) => r.onchange = () => $(".viewer-stage").classList.toggle("phone", r.value === "phone" && r.checked));
+$("#v-edit").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ch = $("#v-change").value.trim(); if (!ch || !viewing) return;
+  const btn = $("#v-apply"); btn.disabled = true; btn.textContent = "Updating…";
+  const html = await buildSite(ch, viewing.html);
+  btn.disabled = false; btn.textContent = "Update";
+  if (!html) { toast($("#site-status").textContent || "Couldn't update the site"); return; }
+  viewing.html = html; save(); $("#v-frame").srcdoc = html; $("#v-change").value = ""; renderSites(); toast("Site updated");
+});
 
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 boot();
